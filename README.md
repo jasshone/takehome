@@ -339,7 +339,7 @@ Congrats on completing the main takehome!
 
 If you had any technical difficulties, work disruptions, or other things you'd like the grader to take into consideration, please write them here: 
 
-n/a
+Had a pasting issue (pasted large amount of text), affecting final submission because of needing to delete the extra test.
 
 Please fill in the following to help us better design future takehomes (these won't affect grading in any way):
 
