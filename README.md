@@ -13,13 +13,13 @@ Important: throughout this takehome, we do *not* want you to assume results in p
 
 ## Topic A - Subliminal Learning in a Toy Setting
 
-To start with, run `topic_a.py` to ensure your hardware and development environment are set up properly and read Section 6 of the [Subliminal Learning: Language Models Transmit Behavioral Traits Via Hidden Signals in Data](papers/subliminal_learning.pdf) corresponding to the code. You don't need to follow all the math of Theorem 1. 
+To start with, run `topic_a.py` to ensure your hardware and development environment are set up properly and read Section 6 of the Subliminal Learning: Language Models Transmit Behavioral Traits Via Hidden Signals in Data (subliminal_learning.pdf) corresponding to the code. You don't need to follow all the math of Theorem 1. 
 
-Next, read section 2 of ["Comments & Extensions of Subliminal Learning"](papers/comments_and_extensions.pdf). The authors used a slightly different setup and found the student achieved a much lower accuracy than in the first paper.
+Next, read section 2 of "Comments & Extensions of Subliminal Learning" (comments_and_extensions.pdf). The authors used a slightly different setup and found the student achieved a much lower accuracy than in the first paper.
 
 Your goal is to build a detailed understanding of how different variations in the setup influence the training dynamics of the various parameter matrices in the toy MLP, and describe how this affects the amount of subliminal learning that occurs. 
 
-### Step 1
+### Step 1 (topic_b_part1.py)
 
 In "Comments & Extensions of Subliminal Learning" the authors found the following:
 
@@ -128,7 +128,7 @@ Confounds: flag them explicitly even when you can't resolve them. This builds tr
 Want me to help you rewrite any specific section with these fixes applied?
 
 ok lets go step by step
-#### Experiment 1: Increasing perturbations in shared init in student
+#### Experiment 1: Increasing perturbations in shared init in student (topic_a_shared_init_perturb.py)
 How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
 To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to std * scale, where we increase scale. Error bars are 95% CI's across 25 parallel runs.
 <img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/d517e5e5-a550-46b7-b50f-d38a9bf34ee9" />
@@ -145,7 +145,7 @@ What is "std" in "std * scale"? Per-layer std of the initialized weights? A glob
 The contrast with the all-logits student is good but could note the confounder: the all-logits student gets direct digit supervision, so it can re-learn from scratch regardless of init. The robustness difference isn't surprising — it's expected — and stating why shows you understand the mechanism rather than just reporting the observation.
 Proposed rewrite:
 
-Experiment 1: Sensitivity to initialization perturbations. We test how robust subliminal learning is to differences between teacher and student initialization by adding Gaussian noise to all student weight matrices at init: each weight receives perturbation N(0, σ_layer * scale), where σ_layer is the standard deviation of that layer's initialized weights. Error bars are 95% CIs across 25 runs.
+Experiment 1: Sensitivity to initialization perturbations. We test how robust subliminal learning is to differences between teacher and student initialization by adding Gaussian noise to all student weight matrices at init: each weight receives perturbation N(0, σ_layer * scale), where σ_layer is the standard deviation of that layer's initialized weights. Error bars are 95% CIs across 25 runs. (topic_a_shared_init_perturb.py)
 
 [PLOT]
 
@@ -201,7 +201,7 @@ Show more
 1:28 PM
 Here's a rewrite:
 
-Experiment 1: Sensitivity to initialization perturbations. How robust is subliminal learning to differences between teacher and student initialization? We add Gaussian noise to student weights at init, with standard deviation σ_layer * scale, where σ_layer is the per-layer standard deviation of the initialized weights. We test two conditions: perturbing all parameters (including the shared output head), and perturbing only hidden layers (leaving the shared output head identical). Error bars are 95% CIs across 25 runs.
+Experiment 1: Sensitivity to initialization perturbations. How robust is subliminal learning to differences between teacher and student initialization? We add Gaussian noise to student weights at init, with standard deviation σ_layer * scale, where σ_layer is the per-layer standard deviation of the initialized weights. We test two conditions: perturbing all parameters (including the shared output head), and perturbing only hidden layers (leaving the shared output head identical). Error bars are 95% CIs across 25 runs. (topic_a_shared_init_perturb.py)
 
 [PLOT]
 
@@ -258,7 +258,7 @@ Chance level changes with K: At K=2, chance is 50%; at K=10, chance is 10%. The 
 Dataset size changes with K: More classes means more training samples. At K=2 you have ~12,000 samples; at K=10 you have ~60,000. This is another confound worth one sentence.
 Here's a rewrite:
 
-Experiment 2: Effect of number of classes. We filter MNIST to digits 0 through K−1 and measure student accuracy as K varies from 2 to 10. The number of auxiliary logits is fixed at 3. Error bars are 95% CIs across 25 runs.
+Experiment 2: Effect of number of classes. We filter MNIST to digits 0 through K−1 and measure student accuracy as K varies from 2 to 10. The number of auxiliary logits is fixed at 3. Error bars are 95% CIs across 25 runs. (topic_a_num_classes.py)
 
 [PLOT]
 
@@ -309,23 +309,23 @@ Critically, this process requires the distillation inputs to provide enough dive
 The student MLP doesn't need to learn the features themselves, as backprop constrains hidden representations via gradient descent over diverse inputs. The actual content of the inputs is almost irrelevant as they're just providing diverse activations so that the gradient has enough information to constrain the weights.
 In terms of distributions, I tested three different hypotheses for what works well.
 
-Q1: Does increased variance help with subliminal learning?
+Q1: Does increased variance help with subliminal learning? (topic_a_noise_variance.py)
 I test this with increasing the variance of the gaussian noise.
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/bc7010d6-8d09-4564-8795-5b5b240b9553" />
 There appears to be no real effect (based on error bars/CI).
 
-Q2: Does IID noise work better?
+Q2: Does IID noise work better? (topic_a_noise_correlation.py)
 I test this based on adding gaussian blur/correlation in the gaussian distribution (which holds factors the same except for correlation). Learning actually increases with additional blur, which may suggest that some spatial structure helps with learning, and that IID noise is not the determining factor.
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/6c213b84-22da-4136-9601-9a8a536e4321" />
 
-Q3: Does the subspace dimension of the noise effect the quality?
+Q3: Does the subspace dimension of the noise effect the quality? (topic_a_noise_subspace.py)
 I vary the subspace dimension of the Gaussian noise.
 <img width="852" height="551" alt="image" src="https://github.com/user-attachments/assets/31c67666-a863-4338-b215-46d0c6574787" />
 The accuracy increases in both the aux and the all logits student with more subspaces.
 
 In looking at these results, the factor appears to be something like how well the input distribution differentiates between the teacher's learned features. This is because pure dimensionality is not necessarily the only factor (Q2) but it is a large factor based on the results of Q3. 
 
-To understand why Q2 performs well, I tested whether the gain is due to spatial smoothing itself or to the frequency distribution induced by smoothing.
+To understand why Q2 performs well, I tested whether the gain is due to spatial smoothing itself or to the frequency distribution induced by smoothing. (topic_a_power_spectrum_match.py)
 
 Experimental setup
 
@@ -341,10 +341,10 @@ Student accuracy is nearly identical (within error bars) under blurred digits, a
 
 This indicates that the improvement does not depend on spatial structure or semantic content, and that it can be reproduced by matching only the power spectrum (i.e., second-order statistics).
 
-A further experiment on blurred MNIST digits reveals that simple structure/blurring cannot reproduce the good results. 
+A further experiment on blurred MNIST digits reveals that simple structure/blurring cannot reproduce the good results. (topic_a_blurred_mnist.py)
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/f57f9d11-73d0-48cb-9faa-dff07afb3fa3" />
 
-To further validate my hypothesis about power spectra, I plotted the power spectra between MNIST, blurred MNIST, low dim noise, high dim noise, and blurred noise.
+To further validate my hypothesis about power spectra, I plotted the power spectra between MNIST, blurred MNIST, low dim noise, high dim noise, and blurred noise. (topic_a_power_spectrum_plot.py)
 
 <img width="912" height="581" alt="image" src="https://github.com/user-attachments/assets/173b8694-fd64-41af-bf38-65a6f8e944d1" />
 
@@ -352,7 +352,7 @@ Based on this graph, I hypothesize that performance depends on the input’s sec
 
 3) Describe your understanding of what drives the amount of subliminal learning in practice, and test your theory by trying to *maximize* the student accuracy, without changing the number of digit and auxiliary logits. Feel free to change other parts of the setup as much as you like.
 Subliminal learning is driven by how effectively the distillation process constrains the student's shared hidden representations toward the teacher's, which depends on initialization proximity, input coverage, and the degree of entanglement between supervised (aux) and unsupervised (digit) output pathways.
-In order to maximize the accuracy, there should be less neurons per layer, identical init, and an optimal spectra profile of the noise. In terms of the optimal amount of gaussian spatial correlation, one may use the previously generated plot to choose this hyperparameter, and this alone increases test accuracy by a substantial amount (>20%). To further refine this number, I run a hyperparameter search on the optimal number of neurons in the hidden layers. 
+In order to maximize the accuracy, there should be less neurons per layer, identical init, and an optimal spectra profile of the noise. In terms of the optimal amount of gaussian spatial correlation, one may use the previously generated plot to choose this hyperparameter, and this alone increases test accuracy by a substantial amount (>20%). To further refine this number, I run a hyperparameter search on the optimal number of neurons in the hidden layers. (topic_a_hidden_dim_corrnoise.py)
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/8121aba9-0d76-4657-b7b7-d31ab1e7a5f7" />
 As you you can see, around 200-300 hidden dim appears to be the optimal number for both iid and correlated noise.
 I achieve 0.77 accuracy (error bars shown in graph) on the optimal number of hidden dim as computed via the hyperparameter sweep (256).
@@ -360,7 +360,7 @@ I achieve 0.77 accuracy (error bars shown in graph) on the optimal number of hid
 
 ## Topic B: Subliminal Prompting
 
-In [Token Entanglement in Subliminal Learning](papers/token_entanglement.pdf), the authors report that behavior analogous to subliminal learning could be elicited by prompting. Specifically, there is an idea of "token entanglement" where increasing the probability of one token in a pair like "owl" increases the probability of the other token like "087" and vica versa. 
+In Token Entanglement in Subliminal Learning (token_entanglement.pdf), the authors report that behavior analogous to subliminal learning could be elicited by prompting. Specifically, there is an idea of "token entanglement" where increasing the probability of one token in a pair like "owl" increases the probability of the other token like "087" and vica versa. 
 
 One theory proposed is that this happens due to the geometry of the unembedding layer: that is, writing out “owl” to the final residual stream before the unembedding layer increases “087” more than it increases other numbers *because* the projection of the “owl” direction onto the “087” direction is larger than for the other numbers. 
 
@@ -368,13 +368,13 @@ Now it's your turn to verify that this happens and validate or refute this hypot
 
 ### Step 1
 
-Run `topic_b_part1.py` and ensure your hardware and development environment are set up properly. This will take some time on first run to download the language model. Read Sections 1-3 of the Token Entanglement paper. 
+Run `topic_b_part1.py` and ensure your hardware and development environment are set up properly. This will take some time on first run to download the language model. Read Sections 1-3 of the Token Entanglement paper. (topic_b_part1.py)
 
 Note that this starter code doesn't directly map to all the experiments you'll need to do - it's just some code published with the above paper. Also note the default model in the starter code is Llama-3.2-1B-Instruct, not Llama-3.1-8B-Instruct as in the paper. 
 
-### Step 2
+### Step 2 (topic_b_part2.py, topic_b_utils.py)
 
-Replicate the findings about animal -> increased probability of number, and the reverse direction number -> increased probability of animal. Also, note that many more animals exist than were tried in the paper. Expand the selection of animals and check for evidence that the prior authors cherry-picked particularly effective animals.
+Replicate the findings about animal -> increased probability of number, and the reverse direction number -> increased probability of animal. Also, note that many more animals exist than were tried in the paper. Expand the selection of animals and check for evidence that the prior authors cherry-picked particularly effective animals. (topic_b_part2.py, topic_b_utils.py)
 
 For each animal the script performs:
   1. Animal -> number:
@@ -415,15 +415,15 @@ The following plots may be interpreted as follows:
 <img width="2240" height="960" alt="image" src="https://github.com/user-attachments/assets/4da6c47f-d0b3-487c-af98-f311f632a21c" />
 
 
-I tested 49 animals with a single token representation. 28/49 show strong bidirectional entanglement (>2x increase in log probs in both directions). Animal to number effects appear widespread and stronger, while number->animal effects are weaker. 
+I tested 49 animals with a single token representation. 28/49 show strong bidirectional entanglement (>2x increase in log probs in both directions). Animal to number effects appear widespread and stronger, while number->animal effects are weaker. (topic_b_part2.py, topic_b_utils.py)
 As such, the results do not appear to be cherrypicking as there is widespread evidence of this phenomenon among different animals, though it varies in strength and not all animals appear to have entanglement.
 
 
-### Step 3
+### Step 3 (topic_b_part3.py, topic_b_utils.py)
 
-One interesting data point would be whether the same entangled pairs exist in both a base (pretrained) model and the instruct version derived from that base model. Find such a pair of models and design prompts to test this.
+One interesting data point would be whether the same entangled pairs exist in both a base (pretrained) model and the instruct version derived from that base model. Find such a pair of models and design prompts to test this. (topic_b_part3.py, topic_b_utils.py)
 
-I use Llama 3.2 1B and Llama 3.2 1B Instruct. I utilize the same prompts for fair comparison (substituting bird for animal). As only 3 animals are both in the top k for Base and Instruct models, I remove the restriction and operate on all animals which are single token in both models.
+I use Llama 3.2 1B and Llama 3.2 1B Instruct. I utilize the same prompts for fair comparison (substituting bird for animal). As only 3 animals are both in the top k for Base and Instruct models, I remove the restriction and operate on all animals which are single token in both models. (topic_b_part3.py, topic_b_utils.py)
 <img width="2520" height="1800" alt="image" src="https://github.com/user-attachments/assets/eba4ba2c-c68b-40aa-936a-0a32f9fa913e" />
 
 Here is the description of each of the plots:
@@ -464,7 +464,7 @@ Here is the description of each of the plots:
     differences in bidirectional behavior.
 
 
-Here is the interpretation:
+Here is the interpretation: (topic_b_part3.py, topic_b_utils.py)
 Across 40 animals, strong number↔animal entanglement appears almost exclusively in the Instruct model and not in the Base model.
 
 In the Transfer Strength Across Models plot (top left), nearly all points lie far to the right (Instruct number→animal ratio ≫ 1) but cluster around y ≈ 1 (Base ≈ no effect). Almost none lie near the diagonal, indicating the effect does not transfer from Instruct to Base. This shows that number→animal amplification is strong in Instruct but largely absent in Base.
@@ -473,12 +473,12 @@ The Overlap and Strength Counts bar chart (top right) reinforces this: many anim
 
 The Per-Animal Effect Map (bottom left) shows widespread red (positive log2 ratios) in the Instruct columns for both animal→number and number→animal directions, while the Base columns are mostly near zero with occasional weak or negative values. This visually confirms that bidirectional amplification is systematic in Instruct and weak in Base.
 
-### Step 4
+### Step 4 (topic_b_part4_cosine_baseline.py, topic_b_part4_unit_logit_coupling.py, topic_b_utils.py)
 
-In Eq 1 of the paper, the authors give a metric which tries to measure the unembedding geometry using cosine similarity. Run your own measurements of cosine similarity, then propose and test an alternate metric to evaluate the unembedding hypothesis. 
+In Eq 1 of the paper, the authors give a metric which tries to measure the unembedding geometry using cosine similarity. Run your own measurements of cosine similarity, then propose and test an alternate metric to evaluate the unembedding hypothesis. (topic_b_part4_cosine_baseline.py, topic_b_part4_unit_logit_coupling.py, topic_b_utils.py)
 <img width="2210" height="850" alt="image" src="https://github.com/user-attachments/assets/ccb29c48-6463-429c-afbb-cb1724a998a3" />
 
-Based on the results, there appears to be a moderate correlation between the cosine similarity and predicting ranking, but not strong (max correlation = around 0.3). 
+Based on the results, there appears to be a moderate correlation between the cosine similarity and predicting ranking, but not strong (max correlation = around 0.3). (topic_b_part4_cosine_baseline.py, topic_b_part4_unit_logit_coupling.py, topic_b_utils.py)
 
 I tested using a norm-aware alternative, as follows
 \[
@@ -503,21 +503,21 @@ U_t^\top U_c
 
 <img width="2380" height="1700" alt="image" src="https://github.com/user-attachments/assets/21b491ce-f6bd-4d99-97db-53acea4f99cc" />
 
-The results show that the performance with the norm-aware alternative and the original metric are near-identical, suggesting that norm information does not play a significant role in predicting ranking.
+The results show that the performance with the norm-aware alternative and the original metric are near-identical, suggesting that norm information does not play a significant role in predicting ranking. (topic_b_part4_unit_logit_coupling.py, topic_b_utils.py)
 
-### Step 5
+### Step 5 (topic_b_part5_head_swap_test.py, topic_b_part5_head_swap_split_test.py, topic_b_part5_residual_alignment_test.py, topic_b_utils.py)
 
-Based on your results so far, what is your best guess about what is causing the subliminal prompting effect? If you think there are multiple factors, roughly estimate the magnitude of the contribution of each one. Run and document any additional experiments as necessary to gather evidence to support your answers.
+Based on your results so far, what is your best guess about what is causing the subliminal prompting effect? If you think there are multiple factors, roughly estimate the magnitude of the contribution of each one. Run and document any additional experiments as necessary to gather evidence to support your answers. (topic_b_part5_head_swap_test.py, topic_b_part5_head_swap_split_test.py, topic_b_part5_residual_alignment_test.py, topic_b_utils.py)
 
 My best guess is that subliminal prompting is due to similar directions in the unembed layer causing unrelated concepts to be entangled. The reason why this phenomenon is more present in the Instruct model may be because the model may compress some subspaces as a result of instruction tuning. 
 
-I first ran an experiment to see if this shift is due to concept activation in the residual stream. In particular, I tried base vs instruct because of the greater numbers of entangled pairs in the latter. 
+I first ran an experiment to see if this shift is due to concept activation in the residual stream. In particular, I tried base vs instruct because of the greater numbers of entangled pairs in the latter. (topic_b_part5_residual_alignment_test.py, topic_b_utils.py)
 
 <img width="2380" height="1700" alt="image" src="https://github.com/user-attachments/assets/dd2cec0c-34e4-48f6-9316-91ae56f14892" />
 shows that the residual stream actually moves more for base models. This suggests that residual stream changes due to concepts is not the reason for entanglement. 
 
 
-Then, I tried to test the unembed hypothesis directly by swapping the output head in base with the output head in Instruct, to see if the unembed in Instruct is causing entanglement.
+Then, I tried to test the unembed hypothesis directly by swapping the output head in base with the output head in Instruct, to see if the unembed in Instruct is causing entanglement. (topic_b_part5_head_swap_test.py, topic_b_part5_head_swap_split_test.py, topic_b_utils.py)
 The prompts used are the base prompt and the chat template prompt for instruct. (Base and Base + Instruct Head share the same prompt)
 
 ### Head Swap Entanglement Summary (n = 30 animals)
@@ -535,7 +535,7 @@ The prompts used are the base prompt and the chat template prompt for instruct. 
 - **Strong Bidir (>2× both)**: Fraction showing >2× amplification in both directions
 This leads to a 30% improvement in the number of bidirectional entangled pairs, showing a strong effect of the output head on entanglement.
 
-To further ablate this analysis, I try to isolate the effect of the LN and output head. 
+To further ablate this analysis, I try to isolate the effect of the LN and output head. (topic_b_part5_head_swap_split_test.py, topic_b_utils.py)
 <img width="2210" height="850" alt="image" src="https://github.com/user-attachments/assets/7b3d8b1c-32ce-4242-9c58-70412244d08d" />
 The result shows that the majority of the impact is concentrated in the LM head rather than the norm. 
 
