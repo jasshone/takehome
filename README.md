@@ -40,20 +40,20 @@ Below, propose at least five other factors that you could vary, and preregister 
 
 Pick at least 3 out of the 9+ items above and implement and run the experiments. Report what happens using plots and/or tables. Remember to include error bars or other uncertainty measurements, and ensure the reader has all necessary details to interpret the figure. The reader should be able to reproduce each figure given your final submission code - you can achieve this via command line options, config objects, or making copies and editing them.
 
-#### Experiment 1:
-Increasing perturbations in shared init in student
+#### Experiment 1: Increasing perturbations in shared init in student
 How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
 To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to std * scale, where we increase scale. 
 <img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/d517e5e5-a550-46b7-b50f-d38a9bf34ee9" />
 The results suggest that some perturbations in shared init still allow for subliminal learning but as perturbation magnitude increases, the performance approaches random (0.1). In contrast, the student distilled on teacher logits experiences almost no performance degradation from perturbations in its init. 
 
-#### Experiment 2:
-What is the effect of the number of classes on how well the student performs? 
+#### Experiment 2: What is the effect of the number of classes on how well the student performs? 
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/f86253e7-fd11-4910-8d4a-b69e7d0fe4f2" />
 
 We see that with increasing numbers of classes, the aux only student performs worse. In contrast the performance of students which sees the digit logits of the teacher decreases then increases at 3 classes. This effect is present with or without training on just the digit logits (omitting ghost logits), but is not present when the classifier sees the real data.
 
-#### Experiment 3:
+#### Experiment 3: What is the effect of how much noise is in the input on how well the student performs?
+
+We compute the input image as real*alpha + (1-alpha) * N(0, std) where std is scaled to pixel std. 
 
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/4561fa11-5d9a-4aa9-850e-5c77d9adcb06" />
 We see that in the all logits student, less noise in the input corresponds to better distillation. In contrast, in the aux only student, accuracy actually gets worse with less noise and more real images.
@@ -69,7 +69,7 @@ To test this hypothesis, I plot the noise subspace dimension (measured by pca) a
 <img width="971" height="581" alt="image" src="https://github.com/user-attachments/assets/8805e7d6-dad7-4cea-b79c-6643556625b1" />
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/0ec12add-ecaa-4ad7-b73f-50d31c43c71a" />
 
-(Note that the default noise has subspace dim 768, which is the first row in plot 1). As you can see, increasing alpha leads to decreasing subspace dim, which may explain why the performance for the model trained on auxilary logits decreases.
+(Note that the default noise has subspace dim 768, which is the first row in plot 1). As you can see, increasing alpha leads to decreasing subspace dim, which may explain why the performance for the model trained on auxilary logits decreases. 
 
 ### Step 3
 
@@ -260,14 +260,68 @@ The Per-Animal Effect Map (bottom left) shows widespread red (positive log2 rati
 ### Step 4
 
 In Eq 1 of the paper, the authors give a metric which tries to measure the unembedding geometry using cosine similarity. Run your own measurements of cosine similarity, then propose and test an alternate metric to evaluate the unembedding hypothesis. 
+<img width="2210" height="850" alt="image" src="https://github.com/user-attachments/assets/ccb29c48-6463-429c-afbb-cb1724a998a3" />
 
-TODO
+Based on the results, there appears to be a moderate correlation between the cosine similarity and predicting ranking, but not strong (max correlation = around 0.3). 
+
+I tested using a norm-aware alternative, as follows
+\[
+\ell_t = r^\top U_t + b_t
+\]
+
+- \( \ell_t \): logit for token \( t \)  
+- \( r \): final residual stream vector (after last layer norm)  
+- \( U_t \): unembedding vector (column of the unembedding matrix) for token \( t \)  
+- \( b_t \): bias term for token \( t \)
+
+Compared to the original formula:
+
+\[
+U_t^\top U_c
+\]
+
+- \( U_t \): unembedding vector for token \( t \) (e.g., a number)  
+- \( U_c \): unembedding vector for concept token \( c \) (e.g., `" owl"`)  
+- \( U_t^\top U_c \): dot product measuring how much increasing the concept direction also increases the logit of token \( t \)
+
+
+<img width="2380" height="1700" alt="image" src="https://github.com/user-attachments/assets/21b491ce-f6bd-4d99-97db-53acea4f99cc" />
+
+The results show that the performance with the norm-aware alternative and the original metric are near-identical, suggesting that norm information does not play a significant role in predicting ranking.
 
 ### Step 5
 
 Based on your results so far, what is your best guess about what is causing the subliminal prompting effect? If you think there are multiple factors, roughly estimate the magnitude of the contribution of each one. Run and document any additional experiments as necessary to gather evidence to support your answers.
 
-TODO
+My best guess is that subliminal prompting is due to similar directions in the unembed layer causing unrelated concepts to be entangled. The reason why this phenomenon is more present in the Instruct model may be because the model may compress some subspaces as a result of instruction tuning. 
+
+I first ran an experiment to see if this shift is due to concept activation in the residual stream. In particular, I tried base vs instruct because of the greater numbers of entangled pairs in the latter. 
+
+<img width="2380" height="1700" alt="image" src="https://github.com/user-attachments/assets/dd2cec0c-34e4-48f6-9316-91ae56f14892" />
+shows that the residual stream actually moves more for base models. This suggests that residual stream changes due to concepts is not the reason for entanglement. 
+
+
+Then, I tried to test the unembed hypothesis directly by swapping the output head in base with the output head in Instruct, to see if the unembed in Instruct is causing entanglement.
+The prompts used are the base prompt and the chat template prompt for instruct. (Base and Base + Instruct Head share the same prompt)
+
+### Head Swap Entanglement Summary (n = 30 animals)
+
+| Model               | Mean A→N | Median A→N | Mean N→A | Median N→A | Frac A→N > 1 | Frac N→A > 1 | Frac Strong Bidir (>2× both) |
+|---------------------|----------|------------|----------|------------|--------------|--------------|-------------------------------|
+| Base                | 2.20     | 2.02       | 0.93     | 0.91       | 0.93         | 0.30         | 0.00                          |
+| Base + Instruct Head | 5.76     | 5.04       | 1.68     | 1.59       | 1.00         | 0.93         | 0.30                          |
+| Instruct            | 8.90     | 3.45       | 59.69    | 9.41       | 0.80         | 0.93         | 0.53                          |
+
+**Metrics:**
+- **A→N**: Animal → number probability ratio  
+- **N→A**: Number → animal probability ratio  
+- **Frac > 1**: Fraction of animals showing amplification  
+- **Strong Bidir (>2× both)**: Fraction showing >2× amplification in both directions
+This leads to a 30% improvement in the number of bidirectional entangled pairs, showing a strong effect of the output head on entanglement.
+
+To further ablate this analysis, I try to isolate the effect of the LN and output head. 
+<img width="2210" height="850" alt="image" src="https://github.com/user-attachments/assets/7b3d8b1c-32ce-4242-9c58-70412244d08d" />
+The result shows that the majority of the impact is concentrated in the LM head rather than the norm. 
 
 ## Before You Submit
 
@@ -275,12 +329,12 @@ Congrats on completing the main takehome!
 
 If you had any technical difficulties, work disruptions, or other things you'd like the grader to take into consideration, please write them here: 
 
-TODO
+n/a
 
 Please fill in the following to help us better design future takehomes (these won't affect grading in any way):
 
-- One-line description of what compute resources you used here: TODO
-- One-line description of any AI assistance you used here: TODO
+- One-line description of what compute resources you used here: 1 A100
+- One-line description of any AI assistance you used here: Claude and GPT chat and agents
 
 
 ## Optional Bonus Section
