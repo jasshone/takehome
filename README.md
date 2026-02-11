@@ -40,36 +40,250 @@ Below, propose at least five other factors that you could vary, and preregister 
 
 Pick at least 3 out of the 9+ items above and implement and run the experiments. Report what happens using plots and/or tables. Remember to include error bars or other uncertainty measurements, and ensure the reader has all necessary details to interpret the figure. The reader should be able to reproduce each figure given your final submission code - you can achieve this via command line options, config objects, or making copies and editing them.
 
-#### Experiment 1: Increasing perturbations in shared init in student
+#### Experiment 1: Increasing perturbations in shared init in student (topic_a_shared_init_perturb.py)
 How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
-To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to std * scale, where we increase scale. 
-<img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/d517e5e5-a550-46b7-b50f-d38a9bf34ee9" />
-The results suggest that some perturbations in shared init still allow for subliminal learning but as perturbation magnitude increases, the performance approaches random (0.1). In contrast, the student distilled on teacher logits experiences almost no performance degradation from perturbations in its init. 
+To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to (std_of_initialized_weights * scale)^2, where we increase scale. Error bars are 95% CI's across 25 parallel runs.
+<img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/0bf127e7-7355-4618-b70b-e682c2719673" />
+The aux-only student's accuracy degrades monotonically with perturbation scale in both conditions. When all parameters are perturbed (blue), accuracy drops from ~0.55 at scale=0 to ~0.26 at scale=0.4. When only hidden layers are perturbed (green), accuracy is higher at large scales (~0.30 at scale=0.4), confirming that corruption of the shared output head accounts for some of the degradation. However, the green curve still drops substantially, indicating that hidden representation misalignment is the larger factor. The separation between blue and green is modest relative to CIs at scale=0.2 and becomes clearer at scale=0.4, so the output-head contribution should be interpreted cautiously.
+The all-logits student (orange, red) is largely unaffected in either condition, which is expected since direct digit-logit supervision allows it to re-learn regardless of initialization. A small drop appears at scale=0.4 in the hidden-only condition (~0.87 vs ~0.91), suggesting very large init perturbations slightly impair convergence even with full supervision.
 
-#### Experiment 2: What is the effect of the number of classes on how well the student performs? 
+**Takeaway**
+Subliminal learning degrades with initialization perturbation up to ~10% of parameter std, with hidden representation misalignment being the primary driver of degradation and output head corruption a secondary contributor.
+
+
+#### Experiment 2: What is the effect of the number of classes on how well the student performs? (topic_a_num_classes.py)
+
+To test this, we filter MNIST to only digits 0 through K-1. Error bars are 95% CIs across 25 runs.
+
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/f86253e7-fd11-4910-8d4a-b69e7d0fe4f2" />
 
+The aux-only student's accuracy decreases with K, from ~0.84 at K=2 to ~0.54 at K=10. However, two confounds complicate interpretation: (1) chance level decreases from 0.50 to 0.10, so relative to chance the student actually performs comparably or better at higher K; and (2) the ratio of aux logits to total output logits shrinks from 3/5 to 3/13, meaning the subliminal channel becomes proportionally smaller. A controlled experiment holding the aux-to-total ratio fixed would be needed to disentangle these.
+All three distilled-on-noise students (blue, orange, green) show a dip at K=3. The CIs at K=3 [overlap/do not overlap] with adjacent points, so this [may be noise / appears to be a real effect]. The dip appears in the digit-only student (green) as well, suggesting it relates to the classification task itself rather than the aux channel. The real-image student (red) does not show this dip, which may indicate that the effect is specific to learning from random noise inputs.
+
+**Takeaway**
+
+
+# Anthropic Fellows Takehome Project Welcome to the takehome project! The topic of this project is ["subliminal learning"](https://alignment.anthropic.com/2025/subliminal-learning/), a concept introduced by a previous Fellow. This is an active area of research, and in the next 5 hours you'll replic
+
+pasted
+
+hi, i need to workshop my results to be consistent and follow 
+* Is the degree of precision in measurements accurately conveyed through some combination of error bars, credible intervals or statistical tests?
+* Is it clear to a reader what systematic or confounding issues could exist, and how much to trust results?
+* (See this article by Coefficient Giving for more on the concept of reasoning transparency.)
+please help me workshop this. let's go question by question
+
+1:17 PM
+I'll review your results section by section for precision, uncertainty, and reasoning transparency. Let me start with Topic A.
+
+Topic A, Step 2
+Experiment 1 (Init perturbations):
+
+You mention error bars in the plot but don't state how many seeds/runs they represent, or what the bars measure (std? 95% CI? std error?). Add something like "Error bars show ±1 std over N=5 random seeds."
+The claim "performance approaches random (0.1)" — does it actually reach 0.1 within error bars at the largest perturbation? Be precise.
+Confound: when you perturb init, you're changing both hidden layer weights and output head weights. Worth noting whether you perturb all layers or just some.
+Experiment 2 (Number of classes):
+
+The dip-then-rise at 3 classes for logit-supervised students is interesting but you don't discuss uncertainty around it. Is it within error bars? If so, it may be noise rather than a real effect.
+"This effect is present with or without training on just the digit logits" — how did you test this? Was it a separate run? This needs a brief methods note.
+Confound: changing number of classes changes both task difficulty and the ratio of digit-to-aux logits. You should flag this.
+Experiment 3 (Noise in input):
+
+The subspace dimension analysis is good hypothesis-driven work. But the causal claim "may explain why performance decreases" needs tempering — you've shown correlation between alpha and subspace dim, and correlation between alpha and accuracy, but haven't shown subspace dim causally drives accuracy independent of alpha. You partially address this later in Step 3, but here it reads as stronger than the evidence supports.
+When you say "correlation between aux logits and real logits actually increases with increasing signal level" — how is this correlation measured? Pearson? Over what samples? This needs a one-liner.
+Topic A, Step 3
+Question 1 (Mechanism):
+
+Your explanation is solid conceptually but slightly imprecise. You say "auxiliary logit weights are a fixed, shared linear transformation" — clarify that "fixed" means frozen during student training (not updated), and "shared" means identical at init. These are different properties and both matter.
+You should note the key assumption: this works because the aux weights span enough of the Hidden 2 space to constrain it. If aux dimension (3) << hidden dim (256), matching 3 outputs doesn't uniquely determine 256-dim activations. Why does it still work? You need to address this — likely because over many diverse inputs, the system becomes overdetermined. This is a gap in your current answer.
+Question 2 (Random data distributions):
+
+Q1 (variance): "No real effect based on error bars" — state the actual range tested and whether you're comparing overlapping CIs or doing a test.
+Q2 (blur): "Learning actually increases with additional blur" — by how much? Is this outside error bars? The claim that "some spatial structure helps" is one interpretation, but you then do a nice follow-up with spectrum-matched noise that partially refutes this. The narrative could be tighter: lead with the conclusion rather than the initial wrong hypothesis.
+Q3 (subspace dim): This is your strongest result. But "accuracy increases with more subspaces" — at what point does it plateau? Is there a diminishing returns threshold?
+The spectral analysis is impressive but the final claim — "performance depends on the input's second-order spectral profile, and the optimal condition corresponds to a specific balance of low- and mid-frequency energy" — is stated with more confidence than the evidence supports. You've shown that spectrum matters, but "specific balance" implies you've characterized the optimum, which you haven't precisely done.
+Question 3 (Maximizing accuracy):
+
+0.772 accuracy — over how many seeds? What's the std? A single number without uncertainty is exactly the kind of thing graders will flag.
+"Optimal spectra profile of the noise" — did you actually tune this, or just use the blur setting from earlier? Be explicit about what you changed.
+Topic B, Step 2
+"28/49 show strong bidirectional entanglement (>2x increase in log probs in both directions)" — good threshold, clearly stated. But: is 2x a principled cutoff or arbitrary? Acknowledge this.
+"The results do not appear to be cherrypicking" — this is a claim about the original authors. A more precise statement: "The effect is widespread enough (28/49 = 57%) that the original paper's examples are not outliers, though the strongest effects may still represent the upper tail."
+Topic B, Step 3
+This is one of your strongest sections. The base vs instruct comparison is clean.
+One gap: you're comparing models with different prompts (base prompt vs chat template). You acknowledge this, but the confound is significant — the chat template itself could drive differences. Did you try the base prompt on the instruct model, or vice versa? If not, flag this as a limitation explicitly.
+Topic B, Step 4
+"Max correlation = around 0.3" — Spearman or Pearson? Over what N? p-value?
+"Near-identical performance" between norm-aware and original metric — quantify "near-identical." What's the actual correlation difference?
+Topic B, Step 5
+The head-swap experiment is your strongest evidence. The table is good. But:
+No uncertainty reported in the table. These are means/medians over 30 animals, so you should report std or IQR.
+"30% improvement in bidirectional entangled pairs" — this is 0.30 vs 0.00 (base) vs 0.53 (instruct). More precise framing: "Swapping the head recovers 57% of the instruct model's strong bidirectional effect (0.30/0.53)."
+The LN vs head ablation is a nice touch. Quantify the difference rather than just "majority of impact is concentrated in the LM head."
+Overall Patterns to Fix
+Every plot needs: what the error bars represent, how many runs, and the key hyperparameters.
+Every numerical claim needs: uncertainty or sample size context.
+Causal language: you sometimes say "X causes Y" when you've shown correlation. Downgrade to "X is associated with Y" or "X predicts Y" unless you have a controlled ablation.
+Confounds: flag them explicitly even when you can't resolve them. This builds trust.
+Want me to help you rewrite any specific section with these fixes applied?
+
+ok lets go step by step
+#### Experiment 1: Increasing perturbations in shared init in student
+How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
+To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to std * scale, where we increase scale. Error bars are 95% CI's across 25 parallel runs.
+<img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/d517e5e5-a550-46b7-b50f-d38a9bf34ee9" />
+The results suggest that some perturbations in shared init still allow for subliminal learning but as perturbation magnitude increases, the performance approaches random (0.1). In contrast, the student distilled on teacher logits experiences almost no performance degradation from perturbations in its init.
+
+Show more
+1:20 PM
+This is already pretty clean. Here are the specific fixes I'd suggest:
+
+"variance equal to std * scale" — variance or standard deviation? If you're adding noise N(0, σ) where σ = std_of_weights * scale, say that. "Variance equal to std * scale" is dimensionally ambiguous (variance is std², so multiplying std by scale gives you a std, not a variance).
+"performance approaches random (0.1)" — does it actually reach 0.1 within the confidence intervals at your largest scale value? If yes, say "reaches chance level (0.1) within error bars at scale ≥ X." If it's still above 0.1, say "approaches but remains above chance" and give the actual value.
+Which weights are perturbed? All layers? Just hidden layers? Just the output head? This matters because perturbing the shared output head (aux weights) directly breaks the mechanism, while perturbing hidden layers tests something different. A reader needs this to interpret the result.
+What is "std" in "std * scale"? Per-layer std of the initialized weights? A global std? Be explicit.
+The contrast with the all-logits student is good but could note the confounder: the all-logits student gets direct digit supervision, so it can re-learn from scratch regardless of init. The robustness difference isn't surprising — it's expected — and stating why shows you understand the mechanism rather than just reporting the observation.
+Proposed rewrite:
+
+Experiment 1: Sensitivity to initialization perturbations. We test how robust subliminal learning is to differences between teacher and student initialization by adding Gaussian noise to all student weight matrices at init: each weight receives perturbation N(0, σ_layer * scale), where σ_layer is the standard deviation of that layer's initialized weights. Error bars are 95% CIs across 25 runs.
+
+[PLOT]
+
+The aux-only student's accuracy degrades monotonically with perturbation scale, reaching chance (0.1) within error bars by scale = [X]. This is expected: subliminal learning relies on the student's hidden representations aligning with the teacher's via shared output weights, and perturbation disrupts this alignment. The all-logits student shows minimal degradation, which is unsurprising since direct digit supervision allows it to learn de novo regardless of initialization.
+
+How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
+To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to (std_of_initialized_weights * scale)^2, where we increase scale. Error bars are 95% CI's across 25 parallel runs.
+<img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/d517e5e5-a550-46b7-b50f-d38a9bf34ee9" />
+The results suggest that some perturbations in shared init still allow for subliminal learning but as perturbation magnitude increases, the performance approaches random (0.1). In contrast, the student distilled on teacher logits experiences almost no performance degradation from perturbations in its init.
+
+1:22 PM
+Remaining issues:
+
+Which weights are perturbed? You still haven't specified — all layers? Just hidden layers? Hidden + output head? This is critical for interpretation since perturbing the shared aux output weights directly breaks the transmission channel, while perturbing only hidden layers tests something subtler.
+"approaches random (0.1)" — still vague. Look at your plot and say something like "drops below 0.15 by scale = X and is indistinguishable from chance (0.1) within CIs by scale = Y" or "approaches but does not reach chance at the largest tested scale (accuracy = Z ± W at scale = X)." Whichever is true.
+The all-logits contrast — worth one clause explaining why it's robust: "which is expected, since direct digit-logit supervision allows the student to learn regardless of initialization." Without this, a reader might think the robustness difference is a novel finding rather than a sanity check.
+Otherwise the variance description is now clear, and the CI reporting is good.
+
+All parameters are perturbed: the loop is over
+  model.parameters(), so every weight and bias tensor in the
+  network (including the output layer) gets Gaussian noise. See
+  topic_a_shared_init_perturb.py:165-176.
+should i run an experiment with just hidden layer
+
+1:23 PM
+That would be a nice addition if you have time, but it's not strictly necessary. The more important thing right now is to state clearly in the writeup that all parameters (including the shared output head) are perturbed, and note the implication: this conflates two distinct effects (disrupting hidden representation alignment vs. directly breaking the shared output channel). A single sentence like:
+
+"Note that perturbations are applied to all parameters including the shared output head, so this simultaneously tests degradation of hidden-layer alignment and direct corruption of the shared linear map. Perturbing only hidden layers would isolate the former."
+
+That flags the confound for the reader without requiring additional experiments. If you do have time to run hidden-only perturbation, it would strengthen the section — you'd expect the aux-only student to be more robust when the output head stays intact, and the difference between the two curves would quantify how much of the degradation comes from each source.
+
+1770834415099_image.png
+1:26 PM
+Nice — this is a much more informative plot. Key observations to highlight in the writeup:
+
+The aux-only hidden-only curve (green) is above the aux-only all-params curve (blue) at large perturbations. This confirms that corrupting the shared output head accounts for a meaningful portion of the degradation. Quantify the gap: at scale=0.4, it looks like ~0.30 vs ~0.26 — state the actual numbers with CIs.
+But the green curve still drops substantially. So even with the output head intact, perturbing hidden layers alone degrades subliminal learning. This means both mechanisms matter — it's not purely about the output head.
+The all-logits hidden-only curve (red) also drops slightly at large scales (~0.87 vs ~0.91), which is a nice detail — even with direct supervision, very different hidden inits slow convergence or hurt final accuracy slightly. Worth one sentence.
+The all-logits all-params curve (orange) is nearly identical to all-logits hidden-only (red). This makes sense — the digit output head gets direct supervision so perturbing it doesn't matter much; it just gets re-learned.
+For the writeup, something like:
+
+"To disentangle these effects, we also run a hidden-only perturbation condition where the shared output head remains identical between teacher and student. The aux-only student is more robust in this condition (green vs blue), confirming that output head corruption contributes to degradation. However, hidden-only perturbation still substantially reduces accuracy (from ~0.55 to ~0.30 at scale=0.4), showing that hidden representation misalignment is the dominant factor. The all-logits student is minimally affected in either condition, as expected."
+
+One small thing: your error bars on the green and blue curves overlap at some points (e.g., scale=0.2). Note where the separation is and isn't significant.
+
+please rewrite the analysis section 
+How robust is subliminal learning to perturbations in shared initialization? In other words, how different can the initialization be and still have subliminal learning work?
+To test this, we add a Gaussian Noise perturbation to the init for the student, with variance equal to (std_of_initialized_weights * scale)^2, where we increase scale. Error bars are 95% CI's across 25 parallel runs.
+<img width="794" height="551" alt="image" src="https://github.com/user-attachments/assets/0bf127e7-7355-4618-b70b-e682c2719673" />
+The results suggest that some perturbations in shared init still allow for subliminal learning but as perturbation magnitude increases, the performance approaches random (0.1). In contrast, the student distilled on teacher logits experiences almost no performance degradation from perturbations in its init.
+
+Show more
+1:28 PM
+Here's a rewrite:
+
+Experiment 1: Sensitivity to initialization perturbations. How robust is subliminal learning to differences between teacher and student initialization? We add Gaussian noise to student weights at init, with standard deviation σ_layer * scale, where σ_layer is the per-layer standard deviation of the initialized weights. We test two conditions: perturbing all parameters (including the shared output head), and perturbing only hidden layers (leaving the shared output head identical). Error bars are 95% CIs across 25 runs.
+
+[PLOT]
+
+The aux-only student's accuracy degrades monotonically with perturbation scale in both conditions. When all parameters are perturbed (blue), accuracy drops from ~0.55 at scale=0 to ~0.26 at scale=0.4. When only hidden layers are perturbed (green), accuracy is higher at large scales (~0.30 at scale=0.4), confirming that corruption of the shared output head accounts for some of the degradation. However, the green curve still drops substantially, indicating that hidden representation misalignment is the larger factor. The separation between blue and green is modest relative to CIs at scale=0.2 and becomes clearer at scale=0.4, so the output-head contribution should be interpreted cautiously.
+
+The all-logits student (orange, red) is largely unaffected in either condition, which is expected since direct digit-logit supervision allows it to re-learn regardless of initialization. A small drop appears at scale=0.4 in the hidden-only condition (~0.87 vs ~0.91), suggesting very large init perturbations slightly impair convergence even with full supervision.
+
+Swap in your actual numbers from the plot where I've approximated. Does this look right to you?
+
+give me a one sentence takeaway based on this analysis
+
+1:28 PM
+Subliminal learning degrades gracefully with initialization perturbation up to ~10% of parameter std, with hidden representation misalignment being the primary driver of degradation and output head corruption a secondary contributor.
+
+
+""" Effect of number of MNIST classes on subliminal learning. We vary the number of digit classes K from 2 to 10 (using digits 0..K-1), train a teacher on those classes, and distill a student on random images. We measure student accuracy as K changes. """ import math import os from typing import Se
+
+pasted
+
+please explain what this script does
+
+1:30 PM
+This script tests how the number of digit classes (K = 2 through 10) affects subliminal learning. For each K, it:
+
+Filters MNIST to only digits 0 through K-1
+Trains a teacher on real images with cross-entropy on the K digit logits
+Distills four different students from the same shared initialization, all on random noise images except the last:
+Aux only: supervised only on the 3 ghost/auxiliary logits
+All logits: supervised on all K + 3 logits
+Digit logits only: supervised on just the K digit logits (no aux), random images
+Digit logits only, real images: supervised on just the K digit logits, but using real training images instead of noise
+Evaluates each student's digit classification accuracy on the real test set
+The "digit logits only" conditions are controls — they let you separate the effect of having aux logits (the subliminal channel) from direct digit supervision, and the effect of random vs real input images.
+
+All 25 models are trained in parallel via the MultiLinear/MultiClassifier batched architecture, and results are reported with 95% CIs.
+
+One thing worth noting: the total output size changes with K (it's K + 3), so the ratio of aux logits to digit logits shifts as K increases. At K=2, aux logits are 3 out of 5 (60%); at K=10, they're 3 out of 13 (23%). This is a confound you should flag in the writeup.
+
+1770834697674_image.png
+#### Experiment 2: What is the effect of the number of classes on how well the student performs? (topic_a_num_classes.py)
+To test this, we filter MNIST to only digits 0 through K-1. Error bars have the same definition as the other experiment.
+<img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/f86253e7-fd11-4910-8d4a-b69e7d0fe4f2" />
 We see that with increasing numbers of classes, the aux only student performs worse. In contrast the performance of students which sees the digit logits of the teacher decreases then increases at 3 classes. This effect is present with or without training on just the digit logits (omitting ghost logits), but is not present when the classifier sees the real data.
 
-#### Experiment 3: What is the effect of how much noise is in the input on how well the student performs?
+please help me workshopthis
 
-We compute the input image as real*alpha + (1-alpha) * N(0, std) where std is scaled to pixel std. 
+1:31 PM
+Issues to address:
+
+The big confound: As K increases, the ratio of aux logits to total logits changes (3/5 = 60% at K=2, down to 3/13 = 23% at K=10). So you can't tell whether the aux-only student degrades because the task is harder (more classes) or because the aux channel is proportionally smaller. Flag this explicitly, and ideally note that a controlled experiment would fix the aux-to-total ratio.
+The dip at K=3: You highlight that the all-logits and digit-only students dip at K=3, but look at the error bars — do they overlap with K=2 and K=4? If so, this may not be a real effect. Be precise: "The dip at K=3 is outside/within CIs of adjacent points."
+Chance level changes with K: At K=2, chance is 50%; at K=10, chance is 10%. The aux-only student going from ~0.84 at K=2 to ~0.54 at K=10 looks like a big drop, but relative to chance it's 0.84 vs 0.50 (K=2) and 0.54 vs 0.10 (K=10) — the student is actually doing better relative to chance at K=10. You should either plot accuracy normalized by chance (e.g., (acc - 1/K) / (1 - 1/K)) or at minimum note this in the text.
+"decreases then increases at 3 classes" — I think you mean it dips at K=3 then recovers. The phrasing is confusing. Also, the green curve (digit logits only, random images) shows this same dip, which is interesting — it suggests the dip is about the task/data, not the aux channel.
+Dataset size changes with K: More classes means more training samples. At K=2 you have ~12,000 samples; at K=10 you have ~60,000. This is another confound worth one sentence.
+Here's a rewrite:
+
+Experiment 2: Effect of number of classes. We filter MNIST to digits 0 through K−1 and measure student accuracy as K varies from 2 to 10. The number of auxiliary logits is fixed at 3. Error bars are 95% CIs across 25 runs.
+
+[PLOT]
+
+The aux-only student's accuracy decreases with K, from ~0.84 at K=2 to ~0.54 at K=10. However, two confounds complicate interpretation: (1) chance level decreases from 0.50 to 0.10, so relative to chance the student actually performs comparably or better at higher K; and (2) the ratio of aux logits to total output logits shrinks from 3/5 to 3/13, meaning the subliminal channel becomes proportionally smaller. A controlled experiment holding the aux-to-total ratio fixed would be needed to disentangle these.
+
+All three distilled-on-noise students (blue, orange, green) show a dip at K=3. The CIs at K=3 [overlap/do not overlap] with adjacent points, so this [may be noise / appears to be a real effect]. The dip appears in the digit-only student (green) as well, suggesting it relates to the classification task itself rather than the aux channel. The real-image student (red) does not show this dip, which may indicate that the effect is specific to learning from random noise inputs.
+
+**Takeaway**
+Aux-only student accuracy decreases with more classes in absolute terms, but two confounds — changing chance level and shrinking aux-to-total logit ratio — make it unclear whether subliminal learning itself is degrading or the task is simply harder relative to the channel capacity.
+
+#### Experiment 3: What is the effect of how much noise is in the input on how well the student performs? (topic_a_input_signal.py)
+
+I interpolate between random noise and real MNIST images as input = α · real + (1−α) · N(0, σ_pixel), where σ_pixel is the per-pixel standard deviation of the training set. At α=0, inputs are pure noise; at α=1, inputs are real images. Error bars are 95% CIs across 25 runs.
 
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/4561fa11-5d9a-4aa9-850e-5c77d9adcb06" />
-We see that in the all logits student, less noise in the input corresponds to better distillation. In contrast, in the aux only student, accuracy actually gets worse with less noise and more real images.
-This is a surprising finding, as further analysis finds that correlation between aux logits and real logits actually increases with increasing signal level.
-
+The all-logits student improves monotonically with α, which is expected since real images match the test distribution. The aux-only student shows the opposite pattern: accuracy decreases with more signal, from ~0.55 at α=0 to ~[value] at α=1.
+This is surprising, since the correlation between aux and digit logits actually increases with α:
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/b5cef65f-539e-4d1f-acdc-af7809f0122c" />
 
-The all-logits student improves with more signal, which is expected, as real images are the actual test distribution, so distilling on them directly transfers digit classification ability.
-For the aux-only student, accuracy decreases with more signal despite the aux logits being more correlated with digit logits on real images. This may be because real MNIST images occupy a narrow subspace of the input space compared to random noise. While the aux logits carry more digit-relevant information per sample on real images, the lack of input diversity means the gradient constrains fewer of the network's weights during distillation. The student may learn to match the teacher's aux outputs on MNIST-like inputs without its hidden representations globally aligning with the teacher's.
-In other words, higher correlation between aux and digit logits is not sufficient; what matters for subliminal learning is whether the distillation inputs provide enough coverage of the input space to constrain the full weight matrices toward the teacher's.
-To test this hypothesis, I plot the noise subspace dimension (measured by pca) against increasing alpha.
+This means higher per-sample informativeness of the aux channel does not translate to better subliminal learning. One hypothesis is that real MNIST images occupy a lower-dimensional subspace than random noise, providing less diverse activations and thus fewer constraints on the student's weight matrices during distillation. To check whether input dimensionality co-varies with α, we measure the effective subspace dimension (number of PCA components explaining 95% of variance) of the interpolated inputs:
 
 <img width="971" height="581" alt="image" src="https://github.com/user-attachments/assets/8805e7d6-dad7-4cea-b79c-6643556625b1" />
 <img width="824" height="551" alt="image" src="https://github.com/user-attachments/assets/0ec12add-ecaa-4ad7-b73f-50d31c43c71a" />
 
-(Note that the default noise has subspace dim 768, which is the first row in plot 1). As you can see, increasing alpha leads to decreasing subspace dim, which may explain why the performance for the model trained on auxilary logits decreases. 
+Subspace dimension decreases monotonically with α (from 768 at α=0 to ~[value] at α=1), consistent with the hypothesis. However, this is correlational — α simultaneously changes both dimensionality and image content. In Step 3, we directly manipulate input subspace dimension while holding other factors constant to test whether dimensionality causally drives the effect.
 
 ### Step 3
 
@@ -86,17 +300,19 @@ Hidden 1: 784 → 256, ReLU
 Hidden 2: 256 → 256, ReLU
 Output: 256 → 13 (10 digit logits + 3 auxiliary logits)
 
-When the student learns to match the teacher's 3 auxiliary logit outputs, it is implicitly learning to match the teacher's hidden representations. This is because the auxiliary logit weights are a fixed, shared linear transformation of Hidden 2 (identical random init, never trained in either teacher or student). So matching the auxiliary outputs forces the student's Hidden 2 activations toward the teacher's, and backpropagation through the hidden layers pushes Hidden 1 toward the teacher's as well. Since the digit logit weights are also a fixed, shared linear transformation of Hidden 2, the digit logits automatically improve as the hidden representations align with the teacher's, even though they receive no direct supervision.
+When the student is distilled on the teacher's 3 auxiliary logit outputs, its hidden representations are implicitly pushed toward the teacher's. The teacher's aux output weights stay at their random initialization, so the teacher's aux logits are simply a fixed random projection of its trained Hidden 2 activations. The student optimizes both its hidden layers and its aux output weights to match these outputs. However, because the hidden layers (a) contain far more parameters than the 3×256 aux head and (b) start at the same initialization as the teacher's, gradient descent preferentially aligns the student's hidden representations with the teacher's rather than relying solely on aux weight adjustment. This is the implicit bias of shared initialization: it makes hidden-layer alignment the path of least resistance.
+As the student's Hidden 2 activations come to resemble the teacher's, the student's digit logits — which are a fixed random projection of Hidden 2 (frozen at the shared init, not the teacher's trained digit weights) — become partially informative. This is because the hidden representations now encode digit-relevant structure, and even a random linear readout can partially recover class information from well-structured representations. This explains why accuracy is ~0.55 rather than ~0.91: a random readout captures some but not all of the structure that the teacher's trained digit head would.
+Critically, this process requires the distillation inputs to provide enough diversity to constrain the full hidden representation, not just the 3-dimensional aux output. A single input gives only 3 scalar constraints on a 256-dimensional Hidden 2 vector, but over N diverse inputs the system becomes overdetermined (3N constraints ≫ number of hidden parameters), forcing global alignment of the weight matrices rather than per-input memorization.
 
 2) How exactly is it possible for the student to learn features that are useful for classifying digits when the student only gets supervision on random data, and such data largely lacks any visible digit features like lines and curves? Theorem 1 implies that this will work on *any* distribution, but in practice are there some random data distributions that work much better or worse. Why is this?
 
-The student MLP doesn't need to learn the features themselves, as the backprop simply transfers the correct weights to the student MLP by working backwards from the output logit distribution. The actual content of the inputs is almost irrelevant as they're just providing diverse activations so that the gradient has enough information to constrain the weights.
+The student MLP doesn't need to learn the features themselves, as backprop constrains hidden representations via gradient descent over diverse inputs. The actual content of the inputs is almost irrelevant as they're just providing diverse activations so that the gradient has enough information to constrain the weights.
 In terms of distributions, I tested three different hypotheses for what works well.
 
 Q1: Does increased variance help with subliminal learning?
 I test this with increasing the variance of the gaussian noise.
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/bc7010d6-8d09-4564-8795-5b5b240b9553" />
-There appears to be no real effect (based on error bars).
+There appears to be no real effect (based on error bars/CI).
 
 Q2: Does IID noise work better?
 I test this based on adding gaussian blur/correlation in the gaussian distribution (which holds factors the same except for correlation). Learning actually increases with additional blur, which may suggest that some spatial structure helps with learning, and that IID noise is not the determining factor.
@@ -139,7 +355,7 @@ Subliminal learning is driven by how effectively the distillation process constr
 In order to maximize the accuracy, there should be less neurons per layer, identical init, and an optimal spectra profile of the noise. In terms of the optimal amount of gaussian spatial correlation, one may use the previously generated plot to choose this hyperparameter, and this alone increases test accuracy by a substantial amount (>20%). To further refine this number, I run a hyperparameter search on the optimal number of neurons in the hidden layers. 
 <img width="854" height="551" alt="image" src="https://github.com/user-attachments/assets/8121aba9-0d76-4657-b7b7-d31ab1e7a5f7" />
 As you you can see, around 200-300 hidden dim appears to be the optimal number for both iid and correlated noise.
-I achieve 0.772304 accuracy on the optimal number of hidden dim as computed via the hyperparameter sweep (256).
+I achieve 0.77 accuracy (error bars shown in graph) on the optimal number of hidden dim as computed via the hyperparameter sweep (256).
 
 
 ## Topic B: Subliminal Prompting
